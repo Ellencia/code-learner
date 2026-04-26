@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import MobileDrawer from './components/MobileDrawer';
 import ChallengeView from './components/ChallengeView';
+import CurriculumView from './components/CurriculumView';
 import LearnView from './components/LearnView';
 import ChatView from './components/ChatView';
 import WrongNoteView from './components/WrongNoteView';
@@ -20,11 +21,12 @@ export default function App() {
       <Sidebar onOpenSettings={() => setShowSettings(true)} />
 
       <main className="flex-1 overflow-hidden pb-14 md:pb-0">
-        {mode === 'challenge' && <ChallengeView />}
-        {mode === 'learn'     && <LearnView />}
-        {mode === 'quiz'      && <ChatView />}
-        {mode === 'notes'     && <WrongNoteView />}
-        {mode === 'stats'     && <StatsView />}
+        {mode === 'challenge'  && <ChallengeView />}
+        {mode === 'curriculum' && <CurriculumView />}
+        {mode === 'learn'      && <LearnView />}
+        {mode === 'quiz'       && <ChatView />}
+        {mode === 'notes'      && <WrongNoteView />}
+        {mode === 'stats'      && <StatsView />}
       </main>
 
       <MobileNav

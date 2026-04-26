@@ -1,4 +1,4 @@
-import type { Message, Settings, Language, Difficulty, Challenge, RunResult } from './types';
+import type { Message, Settings, Language, Difficulty, Challenge, RunResult, WrongNote } from './types';
 
 // Piston API: 무료, 키 불필요, Python/Java/JS/TS/C++ 지원
 const PISTON_RUNTIMES: Record<Language, { language: string; version: string }> = {
@@ -179,6 +179,64 @@ ${code}
     settings,
     messages: [{ role: 'user', content: prompt }],
   });
+}
+
+export async function generateCurriculumChallenge(
+  settings: Settings,
+  language: Language,
+  difficulty: Difficulty,
+  topic: string,
+): Promise<Challenge> {
+  const diffLabel = { beginner: '초급', intermediate: '중급', advanced: '고급' }[difficulty];
+  const prompt = `당신은 코딩 교육 전문가입니다. ${language}의 "${topic}" 개념을 주제로 한 ${diffLabel} 코딩 챌린지를 생성해주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요:
+{
+  "id": "curr_${language}_${topic.replace(/\s/g, '_')}",
+  "language": "${language}",
+  "difficulty": "${difficulty}",
+  "title": "챌린지 제목",
+  "description": "상세한 문제 설명 (입력/출력 예시 포함)",
+  "starterCode": "// 시작 코드",
+  "hints": ["힌트1", "힌트2", "힌트3"]
+}`;
+
+  const response = await chat({ settings, messages: [{ role: 'user', content: prompt }] });
+  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI 응답 파싱 실패');
+  return JSON.parse(jsonMatch[0]) as Challenge;
+}
+
+export async function generateModelAnswer(
+  settings: Settings,
+  challenge: Challenge,
+): Promise<string> {
+  const prompt = `다음 ${challenge.language} 문제의 모범 답안을 작성해주세요.
+
+문제: ${challenge.title}
+${challenge.description}
+
+모범 답안 코드를 작성하고, 핵심 로직을 간략히 설명해주세요. 한국어로 설명하세요.`;
+  return chat({ settings, messages: [{ role: 'user', content: prompt }] });
+}
+
+export async function getWrongNoteHint(
+  settings: Settings,
+  note: WrongNote,
+): Promise<string> {
+  const prompt = `이 ${note.challenge.language} 문제를 다시 풀려고 합니다. 이전에 틀린 코드를 보고 맞춤 힌트를 주세요.
+
+문제: ${note.challenge.title}
+${note.challenge.description}
+
+이전에 제출한 코드 (틀린 답):
+\`\`\`${note.challenge.language}
+${note.submittedCode}
+\`\`\`
+
+이전 코드의 어떤 부분이 잘못됐는지 짚어주고, 올바른 방향으로 유도해주세요.
+정답 코드는 직접 알려주지 말고, 핵심 힌트만 주세요. 한국어로 친근하게.`;
+  return chat({ settings, messages: [{ role: 'user', content: prompt }] });
 }
 
 export async function explainConcept(

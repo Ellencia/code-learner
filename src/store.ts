@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Message, Settings, Challenge, LearningMode, WrongNote, Snippet } from './types';
+import type { Language } from './types';
 
 interface AppState {
   settings: Settings;
@@ -21,6 +22,10 @@ interface AppState {
   streak: number;
   lastStudyDate: string;
 
+  curriculumProgress: Record<string, string[]>;
+  todayCompleted: number;
+  lastCompletedDate: string;
+
   setSettings: (s: Partial<Settings>) => void;
   addMessage: (m: Message) => void;
   clearMessages: () => void;
@@ -33,6 +38,7 @@ interface AppState {
   deleteSnippet: (id: string) => void;
   logStudy: () => void;
   recordResult: (correct: boolean) => void;
+  completeCurriculumTopic: (lang: Language, topicId: string) => void;
   setMode: (m: LearningMode) => void;
   setCode: (c: string) => void;
   setLoading: (v: boolean) => void;
@@ -49,6 +55,8 @@ export const useStore = create<AppState>()(
         selectedLanguage: 'python',
         difficulty: 'beginner',
         editorFontSize: 13,
+        soundEnabled: true,
+        dailyGoal: 3,
       },
       messages: [],
       currentChallenge: null,
@@ -58,6 +66,9 @@ export const useStore = create<AppState>()(
       snippets: [],
       studyLog: {},
       recentResults: [],
+      curriculumProgress: {},
+      todayCompleted: 0,
+      lastCompletedDate: '',
       mode: 'challenge',
       code: '',
       isLoading: false,
@@ -77,11 +88,16 @@ export const useStore = create<AppState>()(
         set({ currentChallenge: c, code: c?.starterCode ?? '' }),
 
       completeChallenge: (id) =>
-        set((state) => ({
-          completedChallenges: state.completedChallenges.includes(id)
-            ? state.completedChallenges
-            : [...state.completedChallenges, id],
-        })),
+        set((state) => {
+          if (state.completedChallenges.includes(id)) return {};
+          const today = new Date().toDateString();
+          const isNewDay = state.lastCompletedDate !== today;
+          return {
+            completedChallenges: [...state.completedChallenges, id],
+            todayCompleted: isNewDay ? 1 : state.todayCompleted + 1,
+            lastCompletedDate: today,
+          };
+        }),
 
       saveChallenge: (c) =>
         set((state) => {
@@ -118,6 +134,13 @@ export const useStore = create<AppState>()(
         set((state) => ({
           recentResults: [...state.recentResults, correct].slice(-10),
         })),
+
+      completeCurriculumTopic: (lang, topicId) =>
+        set((state) => {
+          const prev = state.curriculumProgress[lang] ?? [];
+          if (prev.includes(topicId)) return {};
+          return { curriculumProgress: { ...state.curriculumProgress, [lang]: [...prev, topicId] } };
+        }),
 
       setMode: (m) => set({ mode: m }),
       setCode: (c) => set({ code: c }),

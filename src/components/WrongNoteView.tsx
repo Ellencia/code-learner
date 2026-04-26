@@ -1,13 +1,32 @@
 import { useState } from 'react';
-import { Trash2, RotateCcw, ChevronDown, ChevronUp, BookMarked, Bookmark, Copy, Check } from 'lucide-react';
+import { Trash2, RotateCcw, ChevronDown, ChevronUp, BookMarked, Bookmark, Copy, Check, Lightbulb, Loader2 } from 'lucide-react';
 import { useStore } from '../store';
 import { LANGUAGE_ICONS, LANGUAGE_LABELS } from '../types';
 import type { WrongNote, Snippet } from '../types';
 import ReactMarkdown from 'react-markdown';
+import { getWrongNoteHint } from '../api';
 
 // ── 오답 카드 ─────────────────────────────────────────
 function NoteCard({ note, onDelete, onRetry }: { note: WrongNote; onDelete: () => void; onRetry: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [hint, setHint] = useState('');
+  const [isLoadingHint, setIsLoadingHint] = useState(false);
+  const { settings } = useStore();
+
+  const fetchHint = async () => {
+    if (hint) { setExpanded(true); return; }
+    setIsLoadingHint(true);
+    setExpanded(true);
+    try {
+      const h = await getWrongNoteHint(settings, note);
+      setHint(h);
+    } catch (e) {
+      setHint(`오류: ${(e as Error).message}`);
+    } finally {
+      setIsLoadingHint(false);
+    }
+  };
+
   return (
     <div className="bg-[#1e2235] border border-white/5 rounded-xl overflow-hidden">
       <div className="flex items-start justify-between p-4 gap-3">
@@ -27,6 +46,11 @@ function NoteCard({ note, onDelete, onRetry }: { note: WrongNote; onDelete: () =
           </div>
         </button>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button onClick={fetchHint} disabled={isLoadingHint}
+            className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 bg-yellow-400/10 hover:bg-yellow-400/20 px-2 py-1.5 rounded-lg text-xs transition-all disabled:opacity-50">
+            {isLoadingHint ? <Loader2 size={12} className="animate-spin" /> : <Lightbulb size={12} />}
+            힌트
+          </button>
           <button onClick={onRetry}
             className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 bg-indigo-400/10 hover:bg-indigo-400/20 px-2 py-1.5 rounded-lg text-xs transition-all">
             <RotateCcw size={12} /> 다시 풀기
@@ -58,6 +82,22 @@ function NoteCard({ note, onDelete, onRetry }: { note: WrongNote; onDelete: () =
               <ReactMarkdown>{note.review}</ReactMarkdown>
             </div>
           </div>
+          {(hint || isLoadingHint) && (
+            <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-lg p-3">
+              <p className="text-yellow-400 text-xs font-medium mb-2 flex items-center gap-1">
+                <Lightbulb size={11} /> 맞춤 힌트
+              </p>
+              {isLoadingHint ? (
+                <div className="flex items-center gap-2 text-yellow-400 text-xs">
+                  <Loader2 size={11} className="animate-spin" /> 힌트 생성 중...
+                </div>
+              ) : (
+                <div className="text-yellow-200 text-sm prose prose-invert prose-sm max-w-none prose-p:text-yellow-200">
+                  <ReactMarkdown>{hint}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

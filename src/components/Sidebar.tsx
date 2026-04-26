@@ -1,4 +1,4 @@
-import { Flame, Star, Trophy, BookOpen, Code2, Brain, Settings, BookMarked, TrendingUp } from 'lucide-react';
+import { Flame, Star, Trophy, BookOpen, Code2, Brain, Settings, BookMarked, TrendingUp, Map, Target } from 'lucide-react';
 import { useStore } from '../store';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS, type Language, type LearningMode } from '../types';
 
@@ -7,16 +7,22 @@ interface Props {
 }
 
 export default function Sidebar({ onOpenSettings }: Props) {
-  const { settings, setSettings, mode, setMode, xp, streak, completedChallenges } = useStore();
+  const { settings, setSettings, mode, setMode, xp, streak, completedChallenges, todayCompleted } = useStore();
 
   const languages: Language[] = ['python', 'java', 'javascript', 'react', 'typescript', 'cpp'];
   const modes: { id: LearningMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'challenge', label: '코딩 챌린지',  icon: <Code2 size={16} /> },
-    { id: 'learn',     label: 'AI 개념 학습', icon: <BookOpen size={16} /> },
-    { id: 'quiz',      label: 'AI 튜터 채팅', icon: <Brain size={16} /> },
-    { id: 'notes',     label: '오답 노트',    icon: <BookMarked size={16} /> },
-    { id: 'stats',     label: '학습 통계',    icon: <TrendingUp size={16} /> },
+    { id: 'challenge',  label: '코딩 챌린지',  icon: <Code2 size={16} /> },
+    { id: 'curriculum', label: '학습 경로',    icon: <Map size={16} /> },
+    { id: 'learn',      label: 'AI 개념 학습', icon: <BookOpen size={16} /> },
+    { id: 'quiz',       label: 'AI 튜터 채팅', icon: <Brain size={16} /> },
+    { id: 'notes',      label: '오답 노트',    icon: <BookMarked size={16} /> },
+    { id: 'stats',      label: '학습 통계',    icon: <TrendingUp size={16} /> },
   ];
+
+  const dailyGoal = settings.dailyGoal ?? 3;
+  const goalProgress = Math.min(todayCompleted, dailyGoal);
+  const goalPct = Math.round((goalProgress / dailyGoal) * 100);
+  const goalDone = goalProgress >= dailyGoal;
 
   return (
     <aside className="hidden md:flex w-64 bg-[#1a1d2e] border-r border-white/5 flex-col h-screen sticky top-0">
@@ -50,6 +56,24 @@ export default function Sidebar({ onOpenSettings }: Props) {
             <span className="text-sm font-bold text-white">{completedChallenges.length}</span>
           </div>
           <p className="text-gray-500 text-[10px]">완료</p>
+        </div>
+      </div>
+
+      {/* Daily Goal */}
+      <div className="px-3 py-2 border-b border-white/5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="flex items-center gap-1 text-gray-500 text-[10px]">
+            <Target size={10} /> 오늘 목표
+          </span>
+          <span className={`text-[10px] font-medium ${goalDone ? 'text-green-400' : 'text-gray-400'}`}>
+            {goalProgress}/{dailyGoal} {goalDone ? '🎉' : ''}
+          </span>
+        </div>
+        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${goalDone ? 'bg-green-400' : 'bg-indigo-500'}`}
+            style={{ width: `${goalPct}%` }}
+          />
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Key, Eye, EyeOff, X } from 'lucide-react';
+import { Settings, Key, Eye, EyeOff, X, Volume2, VolumeX, Target } from 'lucide-react';
 import { useStore } from '../store';
 
 interface Props {
@@ -103,6 +103,42 @@ export default function SettingsPanel({ onClose }: Props) {
                   {size}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                <span className="flex items-center gap-1.5"><Target size={14} /> 일일 목표</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {[1, 3, 5, 10].map((n) => (
+                  <button key={n} onClick={() => setSettings({ dailyGoal: n })}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      settings.dailyGoal === n
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-[#2a2f45] text-gray-400 active:text-white active:bg-[#32384f]'
+                    }`}>
+                    {n}문제
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                <span className="flex items-center gap-1.5">
+                  {settings.soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />} 효과음
+                </span>
+              </label>
+              <button
+                onClick={() => setSettings({ soundEnabled: !settings.soundEnabled })}
+                className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  settings.soundEnabled
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-[#2a2f45] text-gray-400'
+                }`}>
+                {settings.soundEnabled ? 'ON' : 'OFF'}
+              </button>
             </div>
           </div>
 

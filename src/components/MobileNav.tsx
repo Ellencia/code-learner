@@ -1,4 +1,4 @@
-import { Code2, BookOpen, Brain, BookMarked, TrendingUp, Menu } from 'lucide-react';
+import { Code2, BookOpen, Brain, BookMarked, Menu, Map } from 'lucide-react';
 import { useStore } from '../store';
 import type { LearningMode } from '../types';
 
@@ -7,12 +7,13 @@ interface Props {
   onOpenDrawer: () => void;
 }
 
+// 모바일 바에 5개 + 더보기 버튼
 const MODES: { id: LearningMode; label: string; icon: React.ReactNode }[] = [
-  { id: 'challenge', label: '챌린지', icon: <Code2 size={20} /> },
-  { id: 'learn',     label: '학습',   icon: <BookOpen size={20} /> },
-  { id: 'quiz',      label: '튜터',   icon: <Brain size={20} /> },
-  { id: 'notes',     label: '노트',   icon: <BookMarked size={20} /> },
-  { id: 'stats',     label: '통계',   icon: <TrendingUp size={20} /> },
+  { id: 'challenge',  label: '챌린지', icon: <Code2 size={20} /> },
+  { id: 'curriculum', label: '경로',   icon: <Map size={20} /> },
+  { id: 'learn',      label: '학습',   icon: <BookOpen size={20} /> },
+  { id: 'quiz',       label: '튜터',   icon: <Brain size={20} /> },
+  { id: 'notes',      label: '노트',   icon: <BookMarked size={20} /> },
 ];
 
 export default function MobileNav({ onOpenDrawer }: Props) {

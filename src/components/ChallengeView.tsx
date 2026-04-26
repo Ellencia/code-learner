@@ -1,15 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Play, RefreshCw, Lightbulb, CheckCircle,
   ChevronDown, ChevronUp, Loader2, Code2, FileText,
   Terminal, XCircle, History, Bookmark, TrendingUp, TrendingDown, X, Share2, Check,
+  Timer, Wand2,
 } from 'lucide-react';
 import { useStore } from '../store';
-import { generateChallenge, reviewCode, runCode } from '../api';
+import { generateChallenge, reviewCode, runCode, generateModelAnswer } from '../api';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS, MONACO_LANGUAGE_MAP } from '../types';
 import type { WrongNote, Snippet } from '../types';
 import ReactMarkdown from 'react-markdown';
+import { playSound } from '../utils/sound';
 
 function isCorrect(review: string) {
   // 오답 신호를 먼저 확인 (정답 여부 줄에 X가 있거나, 명시적 오답 표현)
@@ -59,6 +61,14 @@ export default function ChallengeView() {
   const [historySearch, setHistorySearch] = useState('');
   const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [modelAnswer, setModelAnswer] = useState('');
+  const [isLoadingAnswer, setIsLoadingAnswer] = useState(false);
+  const [showModelAnswer, setShowModelAnswer] = useState(false);
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const handleRunRef = useRef<() => void>(() => {});
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   const lang = settings.selectedLanguage;
 
@@ -89,6 +99,31 @@ export default function ChallengeView() {
       setTimeout(() => setShareCopied(false), 2000);
     });
   };
+
+  // 타이머: 문제 바뀔 때 리셋 후 시작
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setElapsed(0);
+    setModelAnswer('');
+    setShowModelAnswer(false);
+    if (!currentChallenge) return;
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChallenge?.id]);
+
+  // 키보드 단축키 (Ctrl+Enter = 제출, Ctrl+R = 실행)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'Enter') { e.preventDefault(); handleSubmitRef.current(); }
+        if (e.key === 'r')     { e.preventDefault(); handleRunRef.current(); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const isCompleted = currentChallenge && completedChallenges.includes(currentChallenge.id);
   const cachedForLang = savedChallenges.filter(c => c.language === lang);
   const filteredHistory = historySearch.trim()
@@ -143,11 +178,13 @@ export default function ChallengeView() {
       setIsRunning(false);
     }
   };
+  handleRunRef.current = handleRun;
 
   const handleSubmit = async () => {
     if (!currentChallenge || !code.trim()) return;
     setIsReviewing(true);
     setMobileTab('problem');
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     try {
       const result = await reviewCode(settings, code, currentChallenge);
       setReview(result);
@@ -157,7 +194,15 @@ export default function ChallengeView() {
       if (correct) {
         completeChallenge(currentChallenge.id);
         addXP(settings.difficulty === 'beginner' ? 10 : settings.difficulty === 'intermediate' ? 25 : 50);
+        const newCount = (useStore.getState().todayCompleted);
+        const goal = settings.dailyGoal ?? 3;
+        if (newCount >= goal) {
+          playSound('goal', settings.soundEnabled ?? true);
+        } else {
+          playSound('correct', settings.soundEnabled ?? true);
+        }
       } else {
+        playSound('wrong', settings.soundEnabled ?? true);
         const note: WrongNote = {
           id: `${currentChallenge.id}_${Date.now()}`,
           challenge: currentChallenge,
@@ -171,6 +216,21 @@ export default function ChallengeView() {
       setReview(`오류: ${(e as Error).message}`);
     } finally {
       setIsReviewing(false);
+    }
+  };
+  handleSubmitRef.current = handleSubmit;
+
+  const handleModelAnswer = async () => {
+    if (!currentChallenge) return;
+    setIsLoadingAnswer(true);
+    setShowModelAnswer(true);
+    try {
+      const answer = await generateModelAnswer(settings, currentChallenge);
+      setModelAnswer(answer);
+    } catch (e) {
+      setModelAnswer(`오류: ${(e as Error).message}`);
+    } finally {
+      setIsLoadingAnswer(false);
     }
   };
 
@@ -265,6 +325,10 @@ export default function ChallengeView() {
               'bg-red-400/10 text-red-400'}`}>
               {settings.difficulty === 'beginner' ? '초급' : settings.difficulty === 'intermediate' ? '중급' : '고급'}
             </span>
+            <span className="flex items-center gap-1 text-gray-500 text-xs ml-auto">
+              <Timer size={11} />
+              {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+            </span>
           </div>
 
           <div className="bg-[#252840] rounded-xl p-4">
@@ -302,7 +366,18 @@ export default function ChallengeView() {
           {/* AI 리뷰 */}
           {(review || isReviewing) && (
             <div className="bg-[#1e2235] rounded-xl p-4 border border-white/5">
-              <h4 className="text-white font-medium text-sm mb-3">🤖 AI 코드 리뷰</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-white font-medium text-sm">🤖 AI 코드 리뷰</h4>
+                {review && !isCorrect(review) && (
+                  <button
+                    onClick={handleModelAnswer}
+                    disabled={isLoadingAnswer}
+                    className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 bg-purple-400/10 hover:bg-purple-400/20 px-2.5 py-1 rounded-lg transition-all disabled:opacity-50">
+                    {isLoadingAnswer ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                    모범 답안 보기
+                  </button>
+                )}
+              </div>
               {isReviewing ? (
                 <div className="flex items-center gap-2 text-indigo-400 text-sm">
                   <Loader2 size={14} className="animate-spin" /> 분석 중...
@@ -310,6 +385,29 @@ export default function ChallengeView() {
               ) : (
                 <div className="text-gray-300 text-sm prose prose-invert prose-sm max-w-none">
                   <ReactMarkdown>{review}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 모범 답안 */}
+          {showModelAnswer && (
+            <div className="bg-purple-900/20 rounded-xl p-4 border border-purple-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-purple-300 font-medium text-sm flex items-center gap-1.5">
+                  <Wand2 size={13} /> 모범 답안
+                </h4>
+                <button onClick={() => setShowModelAnswer(false)} className="text-gray-600 hover:text-gray-400">
+                  <X size={14} />
+                </button>
+              </div>
+              {isLoadingAnswer ? (
+                <div className="flex items-center gap-2 text-purple-400 text-sm">
+                  <Loader2 size={14} className="animate-spin" /> 생성 중...
+                </div>
+              ) : (
+                <div className="text-gray-300 text-sm prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>{modelAnswer}</ReactMarkdown>
                 </div>
               )}
             </div>
