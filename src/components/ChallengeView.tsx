@@ -12,7 +12,16 @@ import type { WrongNote, Snippet } from '../types';
 import ReactMarkdown from 'react-markdown';
 
 function isCorrect(review: string) {
-  return /정답|맞았|맞습니다|correct|\bO\b/.test(review);
+  // 오답 신호를 먼저 확인 (정답 여부 줄에 X가 있거나, 명시적 오답 표현)
+  const wrongPattern = /정답\s*여부[^\n]{0,40}[Xx✗❌×❎]|오답입니다|틀렸습니다|틀린\s*코드/;
+  if (wrongPattern.test(review)) return false;
+
+  // 정답 신호 확인
+  const correctPattern = /정답\s*여부[^\n]{0,40}[Oo✓✅○⭕]|정답입니다|맞았습니다|올바른\s*풀이/;
+  if (correctPattern.test(review)) return true;
+
+  // 판별 불가 시 오답으로 처리 (놓치는 것보다 저장하는 게 안전)
+  return false;
 }
 
 // 최근 결과 기반 난이도 제안
