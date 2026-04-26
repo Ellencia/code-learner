@@ -94,27 +94,6 @@ export default function Sidebar({ onOpenSettings }: Props) {
           ))}
         </div>
 
-        <div className="mt-4">
-          <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">난이도</p>
-          <div className="space-y-1">
-            {(['beginner', 'intermediate', 'advanced'] as const).map((d) => {
-              const labels = { beginner: '초급 🌱', intermediate: '중급 🔥', advanced: '고급 ⚡' };
-              return (
-                <button
-                  key={d}
-                  onClick={() => setSettings({ difficulty: d })}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                    settings.difficulty === d
-                      ? 'bg-[#2a2f45] text-white border border-indigo-500/50'
-                      : 'text-gray-400 hover:text-white hover:bg-[#1e2235]'
-                  }`}
-                >
-                  {labels[d]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Settings button */}
