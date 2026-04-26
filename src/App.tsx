@@ -5,6 +5,7 @@ import MobileDrawer from './components/MobileDrawer';
 import ChallengeView from './components/ChallengeView';
 import LearnView from './components/LearnView';
 import ChatView from './components/ChatView';
+import WrongNoteView from './components/WrongNoteView';
 import SettingsPanel from './components/SettingsPanel';
 import { useStore } from './store';
 
@@ -23,6 +24,7 @@ export default function App() {
         {mode === 'challenge' && <ChallengeView />}
         {mode === 'learn' && <LearnView />}
         {mode === 'quiz' && <ChatView />}
+        {mode === 'notes' && <WrongNoteView />}
       </main>
 
       {/* Mobile bottom nav */}

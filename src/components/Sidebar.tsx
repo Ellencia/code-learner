@@ -1,4 +1,4 @@
-import { Flame, Star, Trophy, BookOpen, Code2, Brain, Settings } from 'lucide-react';
+import { Flame, Star, Trophy, BookOpen, Code2, Brain, Settings, BookMarked } from 'lucide-react';
 import { useStore } from '../store';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS, type Language, type LearningMode } from '../types';
 
@@ -11,9 +11,10 @@ export default function Sidebar({ onOpenSettings }: Props) {
 
   const languages: Language[] = ['python', 'java', 'javascript', 'react', 'typescript', 'cpp'];
   const modes: { id: LearningMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'challenge', label: '코딩 챌린지', icon: <Code2 size={16} /> },
-    { id: 'learn', label: 'AI 개념 학습', icon: <BookOpen size={16} /> },
-    { id: 'quiz', label: 'AI 튜터 채팅', icon: <Brain size={16} /> },
+    { id: 'challenge', label: '코딩 챌린지',  icon: <Code2 size={16} /> },
+    { id: 'learn',     label: 'AI 개념 학습', icon: <BookOpen size={16} /> },
+    { id: 'quiz',      label: 'AI 튜터 채팅', icon: <Brain size={16} /> },
+    { id: 'notes',     label: '오답 노트',    icon: <BookMarked size={16} /> },
   ];
 
   return (

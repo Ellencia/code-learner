@@ -1,4 +1,34 @@
-import type { Message, Settings, Language, Difficulty, Challenge } from './types';
+import type { Message, Settings, Language, Difficulty, Challenge, RunResult } from './types';
+
+// Piston API: 무료, 키 불필요, Python/Java/JS/TS/C++ 지원
+const PISTON_RUNTIMES: Record<Language, { language: string; version: string }> = {
+  python:     { language: 'python',     version: '3.10.0' },
+  java:       { language: 'java',       version: '15.0.2' },
+  javascript: { language: 'javascript', version: '18.15.0' },
+  react:      { language: 'javascript', version: '18.15.0' },
+  typescript: { language: 'typescript', version: '5.0.3' },
+  cpp:        { language: 'c++',        version: '10.2.0' },
+};
+
+export async function runCode(language: Language, code: string): Promise<RunResult> {
+  const runtime = PISTON_RUNTIMES[language];
+  const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      language: runtime.language,
+      version: runtime.version,
+      files: [{ content: code }],
+    }),
+  });
+  if (!res.ok) throw new Error(`코드 실행 서버 오류 (${res.status})`);
+  const data = await res.json();
+  return {
+    stdout: data.run.stdout ?? '',
+    stderr: data.run.stderr ?? '',
+    exitCode: data.run.code ?? 0,
+  };
+}
 
 interface ChatOptions {
   settings: Settings;
