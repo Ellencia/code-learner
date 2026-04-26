@@ -379,8 +379,24 @@ export default function ChallengeView() {
             <h2 className="text-white font-semibold text-sm md:text-base truncate">
               {currentChallenge ? currentChallenge.title : `${LANGUAGE_LABELS[lang]} 챌린지`}
             </h2>
-            <p className="text-gray-500 text-xs">{diffLabel} • {completedChallenges.length}개 완료</p>
+            <p className="text-gray-500 text-xs">{completedChallenges.length}개 완료</p>
           </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {([
+            { id: 'beginner', label: '초급', emoji: '🌱' },
+            { id: 'intermediate', label: '중급', emoji: '🔥' },
+            { id: 'advanced', label: '고급', emoji: '⚡' },
+          ] as const).map(({ id, label, emoji }) => (
+            <button key={id} onClick={() => setSettings({ difficulty: id })}
+              className={`text-xs px-2 py-1 rounded-lg transition-all ${
+                settings.difficulty === id
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-[#252840] text-gray-400 hover:text-white'
+              }`}>
+              <span className="hidden sm:inline">{emoji} </span>{label}
+            </button>
+          ))}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {cachedForLang.length > 0 && (

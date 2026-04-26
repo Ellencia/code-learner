@@ -184,9 +184,16 @@ ${code}
 export async function explainConcept(
   settings: Settings,
   language: Language,
-  topic: string
+  topic: string,
+  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner'
 ): Promise<string> {
-  const prompt = `${language}의 "${topic}" 개념을 초보자도 이해하기 쉽게 설명해주세요.
+  const difficultyGuide = {
+    beginner: '초보자도 이해할 수 있도록 쉽고 친절하게, 비유와 함께',
+    intermediate: '기본 개념은 간략히 하고 실용적인 사용법과 패턴 위주로',
+    advanced: '심화 내용, 내부 동작 원리, 성능/주의사항, 고급 패턴 위주로',
+  }[difficulty];
+
+  const prompt = `${language}의 "${topic}" 개념을 ${difficultyGuide} 설명해주세요.
 
 - 핵심 개념 설명
 - 실제 코드 예시 (코드 블록 사용)

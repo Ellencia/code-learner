@@ -7,29 +7,29 @@ import ReactMarkdown from 'react-markdown';
 
 const CACHE_PREFIX = 'learn_cache_';
 
-function getCacheKey(lang: string, topic: string) {
-  return `${CACHE_PREFIX}${lang}__${topic}`;
+function getCacheKey(lang: string, topic: string, difficulty = 'beginner') {
+  return `${CACHE_PREFIX}${lang}__${difficulty}__${topic}`;
 }
 
-function loadCache(lang: string, topic: string): string | null {
+function loadCache(lang: string, topic: string, difficulty = 'beginner'): string | null {
   try {
-    return localStorage.getItem(getCacheKey(lang, topic));
+    return localStorage.getItem(getCacheKey(lang, topic, difficulty));
   } catch {
     return null;
   }
 }
 
-function saveCache(lang: string, topic: string, content: string) {
+function saveCache(lang: string, topic: string, content: string, difficulty = 'beginner') {
   try {
-    localStorage.setItem(getCacheKey(lang, topic), content);
+    localStorage.setItem(getCacheKey(lang, topic, difficulty), content);
   } catch {
     // localStorage 용량 초과 등은 무시
   }
 }
 
-function deleteCache(lang: string, topic: string) {
+function deleteCache(lang: string, topic: string, difficulty = 'beginner') {
   try {
-    localStorage.removeItem(getCacheKey(lang, topic));
+    localStorage.removeItem(getCacheKey(lang, topic, difficulty));
   } catch {
     // ignore
   }
@@ -45,7 +45,7 @@ const TOPICS: Record<string, string[]> = {
 };
 
 export default function LearnView() {
-  const { settings, updateStreak } = useStore();
+  const { settings, setSettings, updateStreak } = useStore();
   const [topic, setTopic] = useState('');
   const [explanation, setExplanation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,7 +63,7 @@ export default function LearnView() {
 
     // 캐시 확인
     if (!forceRefresh) {
-      const cached = loadCache(lang, t);
+      const cached = loadCache(lang, t, settings.difficulty);
       if (cached) {
         setExplanation(cached);
         setFromCache(true);
@@ -81,9 +81,9 @@ export default function LearnView() {
     setExplanation('');
     setFromCache(false);
     try {
-      const result = await explainConcept(settings, lang, t);
+      const result = await explainConcept(settings, lang, t, settings.difficulty);
       setExplanation(result);
-      saveCache(lang, t, result);
+      saveCache(lang, t, result, settings.difficulty);
       updateStreak();
     } catch (e) {
       setExplanation(`오류: ${(e as Error).message}`);
@@ -125,7 +125,7 @@ export default function LearnView() {
                     </span>
                   )}
                   <button
-                    onClick={() => { deleteCache(lang, topic); learn(topic, true); }}
+                    onClick={() => { deleteCache(lang, topic, settings.difficulty); learn(topic, true); }}
                     title="AI에게 다시 요청"
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 active:bg-white/15 px-2 py-1 rounded-full transition-all whitespace-nowrap"
                   >
@@ -166,6 +166,22 @@ export default function LearnView() {
           </span>
           <ChevronDown size={15} className="text-gray-500 flex-shrink-0" />
         </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {([
+            { id: 'beginner', label: '초급' },
+            { id: 'intermediate', label: '중급' },
+            { id: 'advanced', label: '고급' },
+          ] as const).map(({ id, label }) => (
+            <button key={id} onClick={() => setSettings({ difficulty: id })}
+              className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${
+                settings.difficulty === id
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-[#252840] text-gray-400'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Inline custom topic input */}
         <div className="flex items-center gap-1.5 bg-[#1e2235] border border-white/10 rounded-lg px-2.5 py-1.5">
@@ -201,7 +217,7 @@ export default function LearnView() {
             </div>
             <div className="overflow-y-auto p-3 grid grid-cols-2 gap-2">
               {topics.map((t) => {
-                const cached = !!loadCache(lang, t);
+                const cached = !!loadCache(lang, t, settings.difficulty);
                 return (
                   <button
                     key={t}
@@ -231,9 +247,25 @@ export default function LearnView() {
               <BookOpen size={16} />
               <span className="font-semibold text-white text-sm">개념 학습</span>
             </div>
-            <p className="text-gray-500 text-xs">
+            <p className="text-gray-500 text-xs mb-2">
               {LANGUAGE_ICONS[lang]} {LANGUAGE_LABELS[lang]} 주요 개념
             </p>
+            <div className="flex items-center gap-1">
+              {([
+                { id: 'beginner', label: '초급', emoji: '🌱' },
+                { id: 'intermediate', label: '중급', emoji: '🔥' },
+                { id: 'advanced', label: '고급', emoji: '⚡' },
+              ] as const).map(({ id, label, emoji }) => (
+                <button key={id} onClick={() => setSettings({ difficulty: id })}
+                  className={`flex-1 text-xs py-1 rounded-lg transition-all ${
+                    settings.difficulty === id
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-[#252840] text-gray-400 hover:text-white'
+                  }`}>
+                  {emoji} {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
