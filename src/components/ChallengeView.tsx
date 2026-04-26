@@ -1,18 +1,34 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Play, RefreshCw, Lightbulb, CheckCircle,
   ChevronDown, ChevronUp, Loader2, Code2, FileText,
-  Terminal, XCircle, History,
+  Terminal, XCircle, History, Bookmark, TrendingUp, TrendingDown, X,
 } from 'lucide-react';
 import { useStore } from '../store';
 import { generateChallenge, reviewCode, runCode } from '../api';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS, MONACO_LANGUAGE_MAP } from '../types';
-import type { WrongNote } from '../types';
+import type { WrongNote, Snippet } from '../types';
 import ReactMarkdown from 'react-markdown';
 
 function isCorrect(review: string) {
   return /정답|맞았|맞습니다|correct|\bO\b/.test(review);
+}
+
+// 최근 결과 기반 난이도 제안
+function useDifficultySuggestion(recentResults: boolean[], currentDifficulty: string) {
+  return useMemo(() => {
+    if (recentResults.length < 5) return null;
+    const last5 = recentResults.slice(-5);
+    const correctCount = last5.filter(Boolean).length;
+    if (correctCount >= 4 && currentDifficulty !== 'advanced') {
+      return { direction: 'up' as const, msg: '최근 5문제 중 4개 이상 정답! 난이도를 올려볼까요? 🚀' };
+    }
+    if (correctCount <= 1 && currentDifficulty !== 'beginner') {
+      return { direction: 'down' as const, msg: '조금 어렵게 느껴지시나요? 난이도를 낮춰볼까요? 💪' };
+    }
+    return null;
+  }, [recentResults, currentDifficulty]);
 }
 
 export default function ChallengeView() {
@@ -20,6 +36,7 @@ export default function ChallengeView() {
     settings, currentChallenge, setChallenge, code, setCode,
     completedChallenges, completeChallenge, addXP, updateStreak,
     isLoading, setLoading, saveChallenge, addWrongNote, savedChallenges,
+    addSnippet, recentResults, recordResult, logStudy, setSettings,
   } = useStore();
 
   const [review, setReview] = useState('');
@@ -27,18 +44,16 @@ export default function ChallengeView() {
   const [hintIndex, setHintIndex] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
   const [mobileTab, setMobileTab] = useState<'problem' | 'editor'>('problem');
-
-  // 코드 실행 상태
   const [runOutput, setRunOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-
-  // 저장된 챌린지 패널
   const [showHistory, setShowHistory] = useState(false);
+  const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
 
   const lang = settings.selectedLanguage;
   const diffLabel = settings.difficulty === 'beginner' ? '초급' : settings.difficulty === 'intermediate' ? '중급' : '고급';
   const isCompleted = currentChallenge && completedChallenges.includes(currentChallenge.id);
   const cachedForLang = savedChallenges.filter(c => c.language === lang);
+  const suggestion = useDifficultySuggestion(recentResults, settings.difficulty);
 
   const loadChallenge = async () => {
     if (!settings.apiKey) { alert('먼저 Settings에서 API 키를 설정해주세요.'); return; }
@@ -48,11 +63,13 @@ export default function ChallengeView() {
     setShowHints(false);
     setHintIndex(0);
     setShowHistory(false);
+    setDismissedSuggestion(false);
     try {
       const c = await generateChallenge(settings, lang, settings.difficulty, completedChallenges);
       setChallenge(c);
-      saveChallenge(c);          // 캐시에 저장
+      saveChallenge(c);
       updateStreak();
+      logStudy();
       setMobileTab('problem');
     } catch (e) {
       alert((e as Error).message);
@@ -75,10 +92,10 @@ export default function ChallengeView() {
     if (!code.trim()) return;
     setIsRunning(true);
     setRunOutput(null);
-    // 모바일에서 에디터 탭으로 이동해서 결과를 보여줌
     try {
       const result = await runCode(lang, code);
       setRunOutput(result);
+      logStudy();
     } catch (e) {
       setRunOutput({ stdout: '', stderr: (e as Error).message, exitCode: 1 });
     } finally {
@@ -93,11 +110,13 @@ export default function ChallengeView() {
     try {
       const result = await reviewCode(settings, code, currentChallenge);
       setReview(result);
-      if (isCorrect(result)) {
+      const correct = isCorrect(result);
+      recordResult(correct);
+      logStudy();
+      if (correct) {
         completeChallenge(currentChallenge.id);
         addXP(settings.difficulty === 'beginner' ? 10 : settings.difficulty === 'intermediate' ? 25 : 50);
       } else {
-        // 오답 노트에 자동 저장
         const note: WrongNote = {
           id: `${currentChallenge.id}_${Date.now()}`,
           challenge: currentChallenge,
@@ -114,13 +133,35 @@ export default function ChallengeView() {
     }
   };
 
+  const handleSaveSnippet = () => {
+    if (!code.trim()) return;
+    const title = prompt('스니펫 이름을 입력하세요:', currentChallenge?.title ?? '');
+    if (!title) return;
+    const snippet: Snippet = {
+      id: `snippet_${Date.now()}`,
+      title,
+      code,
+      language: lang,
+      date: new Date().toLocaleDateString('ko-KR'),
+    };
+    addSnippet(snippet);
+  };
+
+  const applyDifficulty = (direction: 'up' | 'down') => {
+    const order = ['beginner', 'intermediate', 'advanced'] as const;
+    const idx = order.indexOf(settings.difficulty);
+    const next = direction === 'up' ? order[Math.min(idx + 1, 2)] : order[Math.max(idx - 1, 0)];
+    setSettings({ difficulty: next });
+    setDismissedSuggestion(true);
+  };
+
   const showNextHint = () => {
     if (!currentChallenge) return;
     setHintIndex(Math.min(hintIndex + 1, currentChallenge.hints.length - 1));
     setShowHints(true);
   };
 
-  // ── 문제 패널 ──────────────────────────────────────────
+  // ── 문제 패널 ──────────────────────────────────────
   const ProblemPane = (
     <div className="h-full overflow-y-auto">
       {!currentChallenge ? (
@@ -128,30 +169,49 @@ export default function ChallengeView() {
           <div className="text-6xl">🚀</div>
           <div>
             <h3 className="text-white text-xl font-semibold mb-2">준비되셨나요?</h3>
-            <p className="text-gray-400 text-sm max-w-xs">
-              AI가 {LANGUAGE_LABELS[lang]} 문제를 생성해드립니다.
-            </p>
+            <p className="text-gray-400 text-sm max-w-xs">AI가 {LANGUAGE_LABELS[lang]} 문제를 생성해드립니다.</p>
           </div>
-          <button
-            onClick={loadChallenge}
-            disabled={isLoading}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium transition-all"
-          >
+          <button onClick={loadChallenge} disabled={isLoading}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium transition-all">
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : '✨'}
             {isLoading ? '생성 중...' : '챌린지 시작'}
           </button>
           {cachedForLang.length > 0 && (
-            <button
-              onClick={() => setShowHistory(true)}
-              className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors"
-            >
-              <History size={14} />
-              이전 문제 불러오기 ({cachedForLang.length})
+            <button onClick={() => setShowHistory(true)}
+              className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors">
+              <History size={14} /> 이전 문제 불러오기 ({cachedForLang.length})
             </button>
           )}
         </div>
       ) : (
         <div className="p-4 md:p-5 space-y-4">
+          {/* 난이도 자동조정 배너 */}
+          {suggestion && !dismissedSuggestion && (
+            <div className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
+              suggestion.direction === 'up'
+                ? 'bg-green-400/5 border-green-400/20 text-green-300'
+                : 'bg-yellow-400/5 border-yellow-400/20 text-yellow-300'
+            }`}>
+              {suggestion.direction === 'up' ? <TrendingUp size={15} className="flex-shrink-0 mt-0.5" /> : <TrendingDown size={15} className="flex-shrink-0 mt-0.5" />}
+              <div className="flex-1">
+                <p className="mb-2">{suggestion.msg}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => applyDifficulty(suggestion.direction)}
+                    className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-medium">
+                    적용하기
+                  </button>
+                  <button onClick={() => setDismissedSuggestion(true)}
+                    className="text-xs px-3 py-1 hover:bg-white/10 rounded-lg transition-colors opacity-60">
+                    괜찮아요
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => setDismissedSuggestion(true)} className="opacity-40 hover:opacity-70 flex-shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 flex-wrap">
             {isCompleted && (
               <span className="flex items-center gap-1 text-green-400 text-xs bg-green-400/10 px-2.5 py-1 rounded-full">
@@ -161,8 +221,9 @@ export default function ChallengeView() {
             <span className={`text-xs px-2.5 py-1 rounded-full ${
               settings.difficulty === 'beginner' ? 'bg-green-400/10 text-green-400' :
               settings.difficulty === 'intermediate' ? 'bg-yellow-400/10 text-yellow-400' :
-              'bg-red-400/10 text-red-400'
-            }`}>{diffLabel}</span>
+              'bg-red-400/10 text-red-400'}`}>
+              {diffLabel}
+            </span>
           </div>
 
           <div className="bg-[#252840] rounded-xl p-4">
@@ -170,20 +231,15 @@ export default function ChallengeView() {
             <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{currentChallenge.description}</p>
           </div>
 
-          {/* 모바일 에디터 이동 버튼 */}
-          <button
-            onClick={() => setMobileTab('editor')}
-            className="md:hidden w-full flex items-center justify-center gap-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 py-2.5 rounded-xl text-sm font-medium"
-          >
+          <button onClick={() => setMobileTab('editor')}
+            className="md:hidden w-full flex items-center justify-center gap-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 py-2.5 rounded-xl text-sm font-medium">
             <Code2 size={15} /> 에디터로 이동
           </button>
 
           {/* 힌트 */}
           <div>
-            <button
-              onClick={() => setShowHints(!showHints)}
-              className="flex items-center gap-2 text-yellow-400 text-sm transition-colors"
-            >
+            <button onClick={() => setShowHints(!showHints)}
+              className="flex items-center gap-2 text-yellow-400 text-sm transition-colors">
               <Lightbulb size={15} />
               힌트 보기
               {showHints ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -196,9 +252,7 @@ export default function ChallengeView() {
                   </div>
                 ))}
                 {hintIndex < currentChallenge.hints.length - 1 && (
-                  <button onClick={showNextHint} className="text-xs text-gray-500 hover:text-gray-300">
-                    다음 힌트 →
-                  </button>
+                  <button onClick={showNextHint} className="text-xs text-gray-500 hover:text-gray-300">다음 힌트 →</button>
                 )}
               </div>
             )}
@@ -224,7 +278,7 @@ export default function ChallengeView() {
     </div>
   );
 
-  // ── 에디터 패널 ──────────────────────────────────────────
+  // ── 에디터 패널 ──────────────────────────────────────
   const EditorPane = (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-hidden">
@@ -249,42 +303,29 @@ export default function ChallengeView() {
         />
       </div>
 
-      {/* 실행 결과 터미널 */}
+      {/* 터미널 출력 */}
       {(runOutput || isRunning) && (
-        <div className="border-t border-white/5 bg-[#0d0f1a] flex flex-col"
-             style={{ maxHeight: '35%', minHeight: '80px' }}>
+        <div className="border-t border-white/5 bg-[#0d0f1a] flex flex-col" style={{ maxHeight: '35%', minHeight: '80px' }}>
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5">
             <div className="flex items-center gap-2">
               <Terminal size={12} className="text-green-400" />
               <span className="text-xs text-gray-400">출력</span>
               {runOutput && (
-                <span className={`text-xs px-1.5 py-0.5 rounded ${
-                  runOutput.exitCode === 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'
-                }`}>
+                <span className={`text-xs px-1.5 py-0.5 rounded ${runOutput.exitCode === 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
                   exit {runOutput.exitCode}
                 </span>
               )}
             </div>
-            <button onClick={() => setRunOutput(null)} className="text-gray-600 hover:text-gray-400">
-              <XCircle size={13} />
-            </button>
+            <button onClick={() => setRunOutput(null)} className="text-gray-600 hover:text-gray-400"><XCircle size={13} /></button>
           </div>
           <div className="overflow-y-auto p-3 font-mono text-xs leading-relaxed flex-1">
             {isRunning ? (
-              <span className="text-gray-500 flex items-center gap-2">
-                <Loader2 size={12} className="animate-spin" /> 실행 중...
-              </span>
+              <span className="text-gray-500 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> 실행 중...</span>
             ) : (
               <>
-                {runOutput?.stdout && (
-                  <pre className="text-green-300 whitespace-pre-wrap">{runOutput.stdout}</pre>
-                )}
-                {runOutput?.stderr && (
-                  <pre className="text-red-400 whitespace-pre-wrap">{runOutput.stderr}</pre>
-                )}
-                {!runOutput?.stdout && !runOutput?.stderr && (
-                  <span className="text-gray-600">(출력 없음)</span>
-                )}
+                {runOutput?.stdout && <pre className="text-green-300 whitespace-pre-wrap">{runOutput.stdout}</pre>}
+                {runOutput?.stderr && <pre className="text-red-400 whitespace-pre-wrap">{runOutput.stderr}</pre>}
+                {!runOutput?.stdout && !runOutput?.stderr && <span className="text-gray-600">(출력 없음)</span>}
               </>
             )}
           </div>
@@ -293,26 +334,24 @@ export default function ChallengeView() {
 
       {/* 하단 버튼 바 */}
       <div className="p-2.5 border-t border-white/5 bg-[#1a1d2e] flex items-center gap-2">
-        <p className="text-gray-600 text-xs hidden sm:block flex-1">
-          {code.split('\n').length}줄 • {lang}
-        </p>
+        <p className="text-gray-600 text-xs hidden sm:block">{code.split('\n').length}줄 • {lang}</p>
         <div className="flex items-center gap-2 ml-auto">
-          {/* 실행 버튼 */}
-          <button
-            onClick={handleRun}
-            disabled={isRunning || !code.trim()}
+          {/* 스니펫 저장 */}
+          <button onClick={handleSaveSnippet} disabled={!code.trim()}
+            title="코드 스니펫 저장"
+            className="flex items-center gap-1 text-gray-500 hover:text-yellow-400 bg-white/5 hover:bg-yellow-400/10 disabled:opacity-30 p-1.5 rounded-lg text-xs transition-all border border-white/5">
+            <Bookmark size={13} />
+          </button>
+          {/* 실행 */}
+          <button onClick={handleRun} disabled={isRunning || !code.trim()}
             title={lang === 'react' ? 'React: DOM 없이 JS로 실행됩니다' : '코드 실행'}
-            className="flex items-center gap-1.5 bg-[#2a2f45] hover:bg-[#32384f] active:bg-[#3a4060] disabled:opacity-40 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all border border-white/5"
-          >
+            className="flex items-center gap-1.5 bg-[#2a2f45] hover:bg-[#32384f] active:bg-[#3a4060] disabled:opacity-40 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all border border-white/5">
             {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
             실행
           </button>
-          {/* 제출 버튼 */}
-          <button
-            onClick={handleSubmit}
-            disabled={!currentChallenge || isReviewing || !code.trim()}
-            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 active:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all"
-          >
+          {/* 제출 */}
+          <button onClick={handleSubmit} disabled={!currentChallenge || isReviewing || !code.trim()}
+            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 active:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all">
             {isReviewing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
             {isReviewing ? '검토 중...' : '제출 & 리뷰'}
           </button>
@@ -336,46 +375,35 @@ export default function ChallengeView() {
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {cachedForLang.length > 0 && (
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="flex items-center gap-1 text-gray-500 hover:text-gray-300 bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg text-xs transition-all"
-            >
+            <button onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-1 text-gray-500 hover:text-gray-300 bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg text-xs transition-all">
               <History size={13} />
               <span className="hidden sm:inline">이전 문제</span>
               <span className="bg-indigo-500/30 text-indigo-300 rounded px-1 text-[10px]">{cachedForLang.length}</span>
             </button>
           )}
-          <button
-            onClick={loadChallenge}
-            disabled={isLoading}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all"
-          >
+          <button onClick={loadChallenge} disabled={isLoading}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all">
             {isLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
             <span className="hidden sm:inline">{currentChallenge ? '새 문제' : '문제 생성'}</span>
-            <span className="sm:hidden">{currentChallenge ? '새 문제' : '시작'}</span>
+            <span className="sm:hidden">{currentChallenge ? '새' : '시작'}</span>
           </button>
         </div>
       </div>
 
-      {/* 이전 문제 히스토리 드롭다운 */}
+      {/* 이전 문제 히스토리 */}
       {showHistory && (
         <div className="border-b border-white/5 bg-[#1a1d2e] p-3">
-          <p className="text-gray-500 text-xs mb-2">
-            {LANGUAGE_ICONS[lang]} 저장된 {LANGUAGE_LABELS[lang]} 문제 ({cachedForLang.length})
-          </p>
+          <p className="text-gray-500 text-xs mb-2">{LANGUAGE_ICONS[lang]} 저장된 {LANGUAGE_LABELS[lang]} 문제 ({cachedForLang.length})</p>
           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
             {cachedForLang.map(c => (
-              <button
-                key={c.id}
-                onClick={() => loadFromCache(c)}
+              <button key={c.id} onClick={() => loadFromCache(c)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
                   currentChallenge?.id === c.id
                     ? 'bg-indigo-600 border-indigo-500 text-white'
                     : 'bg-[#1e2235] border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-                }`}
-              >
-                {completedChallenges.includes(c.id) ? '✅ ' : ''}
-                {c.title}
+                }`}>
+                {completedChallenges.includes(c.id) ? '✅ ' : ''}{c.title}
               </button>
             ))}
           </div>
@@ -384,33 +412,18 @@ export default function ChallengeView() {
 
       {/* 본문 */}
       <div className="flex-1 overflow-hidden">
-        {/* 데스크톱 */}
         <div className="hidden md:flex h-full">
-          <div className="w-5/12 border-r border-white/5 overflow-hidden flex flex-col">
-            {ProblemPane}
-          </div>
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {EditorPane}
-          </div>
+          <div className="w-5/12 border-r border-white/5 overflow-hidden flex flex-col">{ProblemPane}</div>
+          <div className="flex-1 flex flex-col overflow-hidden">{EditorPane}</div>
         </div>
-
-        {/* 모바일 탭 */}
         <div className="md:hidden flex flex-col h-full">
           <div className="flex border-b border-white/5 bg-[#1a1d2e] flex-shrink-0">
-            <button
-              onClick={() => setMobileTab('problem')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-all ${
-                mobileTab === 'problem' ? 'text-white border-b-2 border-indigo-500' : 'text-gray-500'
-              }`}
-            >
+            <button onClick={() => setMobileTab('problem')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-all ${mobileTab === 'problem' ? 'text-white border-b-2 border-indigo-500' : 'text-gray-500'}`}>
               <FileText size={15} /> 문제
             </button>
-            <button
-              onClick={() => setMobileTab('editor')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-all ${
-                mobileTab === 'editor' ? 'text-white border-b-2 border-indigo-500' : 'text-gray-500'
-              }`}
-            >
+            <button onClick={() => setMobileTab('editor')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-all ${mobileTab === 'editor' ? 'text-white border-b-2 border-indigo-500' : 'text-gray-500'}`}>
               <Code2 size={15} /> 에디터
             </button>
           </div>

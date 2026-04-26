@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Message, Settings, Challenge, LearningMode, WrongNote } from './types';
+import type { Message, Settings, Challenge, LearningMode, WrongNote, Snippet } from './types';
 
 interface AppState {
   settings: Settings;
@@ -9,6 +9,11 @@ interface AppState {
   completedChallenges: string[];
   savedChallenges: Challenge[];
   wrongNotes: WrongNote[];
+  snippets: Snippet[];
+  // 날짜별 학습 횟수: "2026-04-26" → 횟수
+  studyLog: Record<string, number>;
+  // 최근 10회 챌린지 결과 (true=정답)
+  recentResults: boolean[];
   mode: LearningMode;
   code: string;
   isLoading: boolean;
@@ -24,6 +29,10 @@ interface AppState {
   saveChallenge: (c: Challenge) => void;
   addWrongNote: (note: WrongNote) => void;
   deleteWrongNote: (id: string) => void;
+  addSnippet: (s: Snippet) => void;
+  deleteSnippet: (id: string) => void;
+  logStudy: () => void;
+  recordResult: (correct: boolean) => void;
   setMode: (m: LearningMode) => void;
   setCode: (c: string) => void;
   setLoading: (v: boolean) => void;
@@ -45,6 +54,9 @@ export const useStore = create<AppState>()(
       completedChallenges: [],
       savedChallenges: [],
       wrongNotes: [],
+      snippets: [],
+      studyLog: {},
+      recentResults: [],
       mode: 'challenge',
       code: '',
       isLoading: false,
@@ -72,23 +84,38 @@ export const useStore = create<AppState>()(
 
       saveChallenge: (c) =>
         set((state) => {
-          const already = state.savedChallenges.some(s => s.id === c.id);
-          if (already) return {};
-          // 최대 100개 유지
-          const next = [c, ...state.savedChallenges].slice(0, 100);
-          return { savedChallenges: next };
+          if (state.savedChallenges.some(s => s.id === c.id)) return {};
+          return { savedChallenges: [c, ...state.savedChallenges].slice(0, 100) };
         }),
 
       addWrongNote: (note) =>
         set((state) => {
-          // 같은 챌린지 ID의 기존 노트는 덮어씀
           const filtered = state.wrongNotes.filter(n => n.id !== note.id);
           return { wrongNotes: [note, ...filtered].slice(0, 200) };
         }),
 
       deleteWrongNote: (id) =>
+        set((state) => ({ wrongNotes: state.wrongNotes.filter(n => n.id !== id) })),
+
+      addSnippet: (s) =>
+        set((state) => ({ snippets: [s, ...state.snippets].slice(0, 200) })),
+
+      deleteSnippet: (id) =>
+        set((state) => ({ snippets: state.snippets.filter(s => s.id !== id) })),
+
+      logStudy: () => {
+        const today = new Date().toISOString().slice(0, 10);
         set((state) => ({
-          wrongNotes: state.wrongNotes.filter(n => n.id !== id),
+          studyLog: {
+            ...state.studyLog,
+            [today]: (state.studyLog[today] ?? 0) + 1,
+          },
+        }));
+      },
+
+      recordResult: (correct) =>
+        set((state) => ({
+          recentResults: [...state.recentResults, correct].slice(-10),
         })),
 
       setMode: (m) => set({ mode: m }),

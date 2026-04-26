@@ -2,7 +2,7 @@ export type Language = 'python' | 'java' | 'javascript' | 'react' | 'typescript'
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
-export type LearningMode = 'challenge' | 'learn' | 'quiz' | 'notes';
+export type LearningMode = 'challenge' | 'learn' | 'quiz' | 'notes' | 'stats';
 
 export interface Challenge {
   id: string;
@@ -13,6 +13,14 @@ export interface Challenge {
   starterCode: string;
   hints: string[];
   completed?: boolean;
+}
+
+export interface Snippet {
+  id: string;
+  title: string;
+  code: string;
+  language: Language;
+  date: string;
 }
 
 export interface WrongNote {

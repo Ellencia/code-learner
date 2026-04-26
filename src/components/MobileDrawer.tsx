@@ -1,14 +1,15 @@
-import { X, Flame, Star, Trophy } from 'lucide-react';
+import { X, Flame, Star, Trophy, Settings } from 'lucide-react';
 import { useStore } from '../store';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS, type Language } from '../types';
 
 interface Props {
   onClose: () => void;
+  onOpenSettings: () => void;
 }
 
 const LANGUAGES: Language[] = ['python', 'java', 'javascript', 'react', 'typescript', 'cpp'];
 
-export default function MobileDrawer({ onClose }: Props) {
+export default function MobileDrawer({ onClose, onOpenSettings }: Props) {
   const { settings, setSettings, xp, streak, completedChallenges } = useStore();
 
   return (
@@ -93,6 +94,21 @@ export default function MobileDrawer({ onClose }: Props) {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* API 설정 */}
+        <div className="px-4 pb-4 pt-2 border-t border-white/5">
+          <button
+            onClick={() => { onClose(); onOpenSettings(); }}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              useStore.getState().settings.apiKey
+                ? 'bg-[#1e2235] text-gray-400 active:bg-[#252840]'
+                : 'bg-yellow-400/10 text-yellow-400 active:bg-yellow-400/20'
+            }`}
+          >
+            <Settings size={15} />
+            {useStore.getState().settings.apiKey ? 'API 설정' : '⚠️ API 키 필요'}
+          </button>
         </div>
       </div>
     </>
