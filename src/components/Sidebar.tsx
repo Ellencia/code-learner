@@ -29,27 +29,27 @@ export default function Sidebar({ onOpenSettings }: Props) {
       </div>
 
       {/* Stats */}
-      <div className="flex gap-3 p-4 border-b border-white/5">
-        <div className="flex-1 bg-[#1e2235] rounded-xl p-3 text-center">
-          <div className="flex items-center justify-center gap-1 text-orange-400 mb-1">
-            <Flame size={14} />
-            <span className="text-lg font-bold text-white">{streak}</span>
+      <div className="flex gap-2 px-3 py-2.5 border-b border-white/5">
+        <div className="flex-1 bg-[#1e2235] rounded-lg py-1.5 px-1 text-center">
+          <div className="flex items-center justify-center gap-0.5 text-orange-400 mb-0.5">
+            <Flame size={11} />
+            <span className="text-sm font-bold text-white">{streak}</span>
           </div>
-          <p className="text-gray-500 text-xs">연속 학습</p>
+          <p className="text-gray-500 text-[10px]">연속 학습</p>
         </div>
-        <div className="flex-1 bg-[#1e2235] rounded-xl p-3 text-center">
-          <div className="flex items-center justify-center gap-1 text-yellow-400 mb-1">
-            <Star size={14} />
-            <span className="text-lg font-bold text-white">{xp}</span>
+        <div className="flex-1 bg-[#1e2235] rounded-lg py-1.5 px-1 text-center">
+          <div className="flex items-center justify-center gap-0.5 text-yellow-400 mb-0.5">
+            <Star size={11} />
+            <span className="text-sm font-bold text-white">{xp}</span>
           </div>
-          <p className="text-gray-500 text-xs">XP</p>
+          <p className="text-gray-500 text-[10px]">XP</p>
         </div>
-        <div className="flex-1 bg-[#1e2235] rounded-xl p-3 text-center">
-          <div className="flex items-center justify-center gap-1 text-green-400 mb-1">
-            <Trophy size={14} />
-            <span className="text-lg font-bold text-white">{completedChallenges.length}</span>
+        <div className="flex-1 bg-[#1e2235] rounded-lg py-1.5 px-1 text-center">
+          <div className="flex items-center justify-center gap-0.5 text-green-400 mb-0.5">
+            <Trophy size={11} />
+            <span className="text-sm font-bold text-white">{completedChallenges.length}</span>
           </div>
-          <p className="text-gray-500 text-xs">완료</p>
+          <p className="text-gray-500 text-[10px]">완료</p>
         </div>
       </div>
 
