@@ -1,9 +1,39 @@
 import { useState } from 'react';
-import { BookOpen, Send, Loader2, ChevronDown } from 'lucide-react';
+import { BookOpen, Send, Loader2, ChevronDown, Database, RefreshCw } from 'lucide-react';
 import { useStore } from '../store';
 import { explainConcept } from '../api';
 import { LANGUAGE_LABELS, LANGUAGE_ICONS } from '../types';
 import ReactMarkdown from 'react-markdown';
+
+const CACHE_PREFIX = 'learn_cache_';
+
+function getCacheKey(lang: string, topic: string) {
+  return `${CACHE_PREFIX}${lang}__${topic}`;
+}
+
+function loadCache(lang: string, topic: string): string | null {
+  try {
+    return localStorage.getItem(getCacheKey(lang, topic));
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(lang: string, topic: string, content: string) {
+  try {
+    localStorage.setItem(getCacheKey(lang, topic), content);
+  } catch {
+    // localStorage 용량 초과 등은 무시
+  }
+}
+
+function deleteCache(lang: string, topic: string) {
+  try {
+    localStorage.removeItem(getCacheKey(lang, topic));
+  } catch {
+    // ignore
+  }
+}
 
 const TOPICS: Record<string, string[]> = {
   python: ['변수와 자료형', '조건문', '반복문', '함수', '리스트/딕셔너리', '클래스', '예외처리', '파일 입출력', '모듈/패키지', '데코레이터', '제너레이터', 'lambda', '컴프리헨션'],
@@ -19,25 +49,41 @@ export default function LearnView() {
   const [topic, setTopic] = useState('');
   const [explanation, setExplanation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
   const [customTopic, setCustomTopic] = useState('');
   const [showTopicSheet, setShowTopicSheet] = useState(false);
 
   const lang = settings.selectedLanguage;
   const topics = TOPICS[lang] ?? [];
 
-  const learn = async (t: string) => {
+  const learn = async (t: string, forceRefresh = false) => {
+    if (!t.trim()) return;
+    setTopic(t);
+    setShowTopicSheet(false);
+
+    // 캐시 확인
+    if (!forceRefresh) {
+      const cached = loadCache(lang, t);
+      if (cached) {
+        setExplanation(cached);
+        setFromCache(true);
+        updateStreak();
+        return;
+      }
+    }
+
     if (!settings.apiKey) {
       alert('먼저 Settings에서 API 키를 설정해주세요.');
       return;
     }
-    if (!t.trim()) return;
-    setTopic(t);
+
     setIsLoading(true);
     setExplanation('');
-    setShowTopicSheet(false);
+    setFromCache(false);
     try {
       const result = await explainConcept(settings, lang, t);
       setExplanation(result);
+      saveCache(lang, t, result);
       updateStreak();
     } catch (e) {
       setExplanation(`오류: ${(e as Error).message}`);
@@ -66,10 +112,28 @@ export default function LearnView() {
             </div>
           ) : (
             <div>
-              <h2 className="text-white text-xl md:text-2xl font-bold mb-5 flex items-center gap-3">
-                <span>{LANGUAGE_ICONS[lang]}</span>
-                {topic}
-              </h2>
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <h2 className="text-white text-xl md:text-2xl font-bold flex items-center gap-2.5">
+                  <span>{LANGUAGE_ICONS[lang]}</span>
+                  {topic}
+                </h2>
+                <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                  {fromCache && (
+                    <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full whitespace-nowrap">
+                      <Database size={11} />
+                      저장됨
+                    </span>
+                  )}
+                  <button
+                    onClick={() => { deleteCache(lang, topic); learn(topic, true); }}
+                    title="AI에게 다시 요청"
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 active:bg-white/15 px-2 py-1 rounded-full transition-all whitespace-nowrap"
+                  >
+                    <RefreshCw size={11} />
+                    재생성
+                  </button>
+                </div>
+              </div>
               <div className="prose prose-invert prose-sm max-w-none
                 prose-headings:text-white prose-headings:font-semibold
                 prose-p:text-gray-300 prose-p:leading-relaxed
@@ -136,19 +200,23 @@ export default function LearnView() {
               <button onClick={() => setShowTopicSheet(false)} className="text-gray-500 text-xs">닫기</button>
             </div>
             <div className="overflow-y-auto p-3 grid grid-cols-2 gap-2">
-              {topics.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => learn(t)}
-                  className={`px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
-                    topic === t
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-[#1e2235] text-gray-400 active:bg-[#252840]'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+              {topics.map((t) => {
+                const cached = !!loadCache(lang, t);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => learn(t)}
+                    className={`px-3 py-2.5 rounded-xl text-sm text-left transition-all flex items-center justify-between gap-1 ${
+                      topic === t
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-[#1e2235] text-gray-400 active:bg-[#252840]'
+                    }`}
+                  >
+                    <span>{t}</span>
+                    {cached && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </>
@@ -169,19 +237,23 @@ export default function LearnView() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
-            {topics.map((t) => (
-              <button
-                key={t}
-                onClick={() => learn(t)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                  topic === t
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-[#1e2235]'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+            {topics.map((t) => {
+              const cached = !!loadCache(lang, t);
+              return (
+                <button
+                  key={t}
+                  onClick={() => learn(t)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between gap-2 ${
+                    topic === t
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-[#1e2235]'
+                  }`}
+                >
+                  <span>{t}</span>
+                  {cached && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
+                </button>
+              );
+            })}
           </div>
 
           <div className="p-3 border-t border-white/5">
