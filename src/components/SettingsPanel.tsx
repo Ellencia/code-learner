@@ -87,6 +87,25 @@ export default function SettingsPanel({ onClose }: Props) {
           </div>
         </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">에디터 글자 크기</label>
+            <div className="flex items-center gap-2">
+              {[11, 12, 13, 14, 16, 18].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setSettings({ editorFontSize: size })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    settings.editorFontSize === size
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-[#2a2f45] text-gray-400 active:text-white active:bg-[#32384f]'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
         <button
           onClick={save}
           className="w-full mt-6 bg-indigo-600 active:bg-indigo-700 text-white font-medium py-3 rounded-xl transition-colors text-sm"

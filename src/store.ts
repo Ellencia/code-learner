@@ -48,6 +48,7 @@ export const useStore = create<AppState>()(
         apiProvider: 'groq',
         selectedLanguage: 'python',
         difficulty: 'beginner',
+        editorFontSize: 13,
       },
       messages: [],
       currentChallenge: null,

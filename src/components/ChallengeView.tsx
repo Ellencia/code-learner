@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Play, RefreshCw, Lightbulb, CheckCircle,
   ChevronDown, ChevronUp, Loader2, Code2, FileText,
-  Terminal, XCircle, History, Bookmark, TrendingUp, TrendingDown, X,
+  Terminal, XCircle, History, Bookmark, TrendingUp, TrendingDown, X, Share2, Check,
 } from 'lucide-react';
 import { useStore } from '../store';
 import { generateChallenge, reviewCode, runCode } from '../api';
@@ -56,12 +56,44 @@ export default function ChallengeView() {
   const [runOutput, setRunOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
   const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const lang = settings.selectedLanguage;
-  const diffLabel = settings.difficulty === 'beginner' ? '초급' : settings.difficulty === 'intermediate' ? '중급' : '고급';
+
+  // URL 해시에서 공유된 챌린지 복원
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    try {
+      const json = decodeURIComponent(atob(hash));
+      const challenge = JSON.parse(json);
+      if (challenge?.id && challenge?.title) {
+        setChallenge(challenge);
+        saveChallenge(challenge);
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } catch {
+      // 잘못된 해시는 무시
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleShare = () => {
+    if (!currentChallenge) return;
+    const encoded = btoa(encodeURIComponent(JSON.stringify(currentChallenge)));
+    const url = `${window.location.origin}${window.location.pathname}#${encoded}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  };
   const isCompleted = currentChallenge && completedChallenges.includes(currentChallenge.id);
   const cachedForLang = savedChallenges.filter(c => c.language === lang);
+  const filteredHistory = historySearch.trim()
+    ? cachedForLang.filter(c => c.title.toLowerCase().includes(historySearch.toLowerCase()))
+    : cachedForLang;
   const suggestion = useDifficultySuggestion(recentResults, settings.difficulty);
 
   const loadChallenge = async () => {
@@ -231,7 +263,7 @@ export default function ChallengeView() {
               settings.difficulty === 'beginner' ? 'bg-green-400/10 text-green-400' :
               settings.difficulty === 'intermediate' ? 'bg-yellow-400/10 text-yellow-400' :
               'bg-red-400/10 text-red-400'}`}>
-              {diffLabel}
+              {settings.difficulty === 'beginner' ? '초급' : settings.difficulty === 'intermediate' ? '중급' : '고급'}
             </span>
           </div>
 
@@ -298,7 +330,7 @@ export default function ChallengeView() {
           onChange={(v) => setCode(v ?? '')}
           theme="vs-dark"
           options={{
-            fontSize: 13,
+            fontSize: settings.editorFontSize ?? 13,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             padding: { top: 12, bottom: 12 },
@@ -399,6 +431,13 @@ export default function ChallengeView() {
           ))}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {currentChallenge && (
+            <button onClick={handleShare} title="챌린지 링크 복사"
+              className="flex items-center gap-1 text-gray-500 hover:text-gray-300 bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg text-xs transition-all">
+              {shareCopied ? <Check size={13} className="text-green-400" /> : <Share2 size={13} />}
+              <span className="hidden sm:inline">{shareCopied ? '복사됨!' : '공유'}</span>
+            </button>
+          )}
           {cachedForLang.length > 0 && (
             <button onClick={() => setShowHistory(!showHistory)}
               className="flex items-center gap-1 text-gray-500 hover:text-gray-300 bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg text-xs transition-all">
@@ -419,9 +458,17 @@ export default function ChallengeView() {
       {/* 이전 문제 히스토리 */}
       {showHistory && (
         <div className="border-b border-white/5 bg-[#1a1d2e] p-3">
-          <p className="text-gray-500 text-xs mb-2">{LANGUAGE_ICONS[lang]} 저장된 {LANGUAGE_LABELS[lang]} 문제 ({cachedForLang.length})</p>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-gray-500 text-xs flex-1">{LANGUAGE_ICONS[lang]} 저장된 {LANGUAGE_LABELS[lang]} 문제 ({cachedForLang.length})</p>
+            <input
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="제목 검색..."
+              className="bg-[#1e2235] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 w-36"
+            />
+          </div>
           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-            {cachedForLang.map(c => (
+            {filteredHistory.map(c => (
               <button key={c.id} onClick={() => loadFromCache(c)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
                   currentChallenge?.id === c.id
@@ -431,6 +478,9 @@ export default function ChallengeView() {
                 {completedChallenges.includes(c.id) ? '✅ ' : ''}{c.title}
               </button>
             ))}
+            {filteredHistory.length === 0 && (
+              <p className="text-gray-600 text-xs py-1">검색 결과가 없습니다.</p>
+            )}
           </div>
         </div>
       )}

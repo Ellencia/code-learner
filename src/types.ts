@@ -47,6 +47,7 @@ export interface Settings {
   apiProvider: 'groq' | 'openai' | 'gemini';
   selectedLanguage: Language;
   difficulty: Difficulty;
+  editorFontSize: number;
 }
 
 export const LANGUAGE_LABELS: Record<Language, string> = {
