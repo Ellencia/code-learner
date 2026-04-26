@@ -12,13 +12,15 @@ function heatColor(count: number) {
   return 'bg-emerald-400';
 }
 
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function buildCalendar(studyLog: Record<string, number>, weeks: number) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // 오늘 기준으로 weeks*7일 전 시작, 일요일부터 맞춤
   const startDay = new Date(today);
   startDay.setDate(today.getDate() - (weeks * 7 - 1));
-  // 첫 주 일요일로 맞추기
   startDay.setDate(startDay.getDate() - startDay.getDay());
 
   const cols: { date: string; count: number; isToday: boolean; isFuture: boolean }[][] = [];
@@ -27,7 +29,7 @@ function buildCalendar(studyLog: Record<string, number>, weeks: number) {
   for (let w = 0; w < weeks; w++) {
     const col = [];
     for (let d = 0; d < 7; d++) {
-      const dateStr = cur.toISOString().slice(0, 10);
+      const dateStr = localDateStr(cur);
       col.push({
         date: dateStr,
         count: studyLog[dateStr] ?? 0,
